@@ -1,0 +1,21 @@
+{
+  "name": "baileys-whatsapp-logger",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp dengan Baileys untuk mencatat pesan, media, dan panggilan.",
+  "main": "bailey-logger.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Your Name",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-schedule": "^2.1.1",
+    "pino": "^8.21.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
