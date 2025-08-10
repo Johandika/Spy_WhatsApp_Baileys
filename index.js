@@ -48,15 +48,17 @@ function getMessageBody(msg) {
 async function getContactName(contactId, sock) {
   try {
     const contact = await sock.contact.getContact(contactId);
+    console.log("contaaaaaact", contact);
+    console.log("contactId", contactId);
     return contact && (contact.name || contact.verifiedName)
       ? `${contact.name || contact.verifiedName} (${contactId})`
       : contactId;
   } catch (e) {
-    console.error(`[ERROR] Gagal mendapatkan nama kontak untuk ${contactId}`);
     return contactId;
   }
 }
 
+// log message
 async function logMessage(msg) {
   try {
     if (!msg.message) return;
@@ -103,8 +105,15 @@ async function logMessage(msg) {
     if (!logEntryText) return;
     const botNumber = sock.user.id.split(":")[0] + "@s.whatsapp.net";
     const fromLabel = isIncoming ? `USER: ${contactId}` : `BOT: ${botNumber}`;
+    const fromLabel2 = isIncoming ? `${contactId}` : `BOT`;
     const toLabel = isIncoming ? `BOT: ${botNumber}` : `USER: ${contactId}`;
+    const toLabel2 = isIncoming ? `BOT` : `${contactId}`;
     const logEntry = `Waktu: ${timestamp}\nDari: ${fromLabel}\nUntuk: ${toLabel}\nPesan: ${logEntryText}\n\n---\n\n`;
+
+    console.log(
+      `[PESAN] ${timestamp} | ${fromLabel2} - ${toLabel2} | ${logEntryText}`
+    );
+
     await fs.appendFile(logFileName, logEntry);
   } catch (error) {
     if (!error.message.includes("media")) {
@@ -113,6 +122,7 @@ async function logMessage(msg) {
   }
 }
 
+// log panggilan
 async function logCall(callType, contactId, sock, durationText = "") {
   try {
     const now = new Date();
@@ -131,13 +141,14 @@ async function logCall(callType, contactId, sock, durationText = "") {
     const logEntry = `Waktu: ${timestamp} | Tipe: ${callType} | Kontak: ${contactName}${durationInfo}\n`;
     await fs.appendFile(callLogFile, logEntry);
     console.log(
-      `[BERHASIL] Log panggilan "${callType}" dengan ${contactName} telah dicatat.`
+      `[PANGGILAN] ${timestamp} | ${callType} | ${contactName} telah dicatat.`
     );
   } catch (error) {
     console.error("[GAGAL] Gagal menyimpan log panggilan!", error);
   }
 }
 
+// log  list realtime block unblock
 async function logBlockedOrUnblockedContact(contactId, action) {
   try {
     await ensureDirExists(blockedContactsDir);
@@ -157,6 +168,7 @@ async function logBlockedOrUnblockedContact(contactId, action) {
   }
 }
 
+// Menyimpan list kontak di block
 async function saveBlockedContactsToFile() {
   try {
     if (!sock) {
@@ -222,6 +234,8 @@ async function startSock() {
         }
       }
     }
+
+    // logic reconnect
     if (connection === "close") {
       const shouldReconnect =
         (lastDisconnect.error instanceof Boom)?.output?.statusCode !==
@@ -230,7 +244,7 @@ async function startSock() {
     } else if (connection === "open") {
       console.log("Bot pencatat arsip media siap digunakan! 🗂️");
       lastBlockedList = await sock.fetchBlocklist();
-      await saveBlockedContactsToFile();
+      await saveBlockedContactsToFile(); // jalanin save block list di awal
     }
   });
 
@@ -338,11 +352,6 @@ async function startSock() {
   });
 
   sock.ev.on("call", async (callEvents) => {
-    console.log("-----------------------------------------");
-    console.log("CALL EVENT TERBARU:");
-    console.log(JSON.stringify(callEvents, null, 2));
-    console.log("-----------------------------------------");
-
     const call = callEvents[0];
     if (!call) return;
 
@@ -401,16 +410,21 @@ async function startSock() {
   });
 }
 
-// --- JADWAL & SERVER EXPRESS ---
-schedule.scheduleJob("0 4 * * *", () => {
+// Restart Terjadwal
+// schedule.scheduleJob("0 2 * * *", () => {
+schedule.scheduleJob("5 14 * * *", () => {
   console.log("RESTART TERJADWAL: Memulai ulang aplikasi...");
   process.exit(0);
 });
 
-schedule.scheduleJob("0 2 * * *", () => {
+// Jadwal untuk memperbarui daftar nomor yang diblokir (diperbaiki)
+// schedule.scheduleJob("0 3 * * *", () => {
+schedule.scheduleJob("0 14 * * *", () => {
   console.log("[INFO] Memperbarui daftar nomor yang diblokir...");
-  if (sock && sock.isAlive()) {
-    saveBlockedContactsToFile(sock);
+  // Periksa status koneksi dengan benar menggunakan readyState
+  if (sock && sock.ws.readyState === sock.ws.OPEN) {
+    // Panggil fungsi tanpa argumen 'sock' karena 'sock' sudah global
+    saveBlockedContactsToFile();
   } else {
     console.log(
       "[GAGAL] Bot tidak terhubung. Gagal memperbarui daftar blokir."
@@ -420,6 +434,7 @@ schedule.scheduleJob("0 2 * * *", () => {
 
 startSock();
 
+// Express
 app.get("/", (req, res) =>
   res.send("Bot pencatat WhatsApp (Baileys) sedang berjalan!")
 );
