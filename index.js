@@ -81,26 +81,34 @@ async function logMessage(msg) {
       msg.message.audioMessage ||
       msg.message.documentMessage;
     if (mediaMessage) {
-      const mediaBuffer = await downloadMediaMessage(
-        msg,
-        "buffer",
-        {},
-        {
-          logger: pino({ level: "silent" }),
-          reuploadRequest: makeWASocket.getAggregateVotesInPollMessage,
-        }
-      );
-      const mediaDir = path.join(dailyLogDir, "media");
-      await ensureDirExists(mediaDir);
-      const timeString = now.toTimeString().slice(0, 8).replace(/:/g, "-");
-      const extension = mediaMessage.mimetype.split("/")[1] || "dat";
-      const fileName = mediaMessage.fileName || `media.${extension}`;
-      const mediaFileName = `${timeString}_${fileName}`;
-      const mediaFilePath = path.join(mediaDir, mediaFileName);
-      await fs.writeFile(mediaFilePath, mediaBuffer);
-      const relativeMediaPath = path.join("media", mediaFileName);
-      logEntryText =
-        `[MEDIA DISIMPAN: ${relativeMediaPath}] ${messageBody}`.trim();
+      try {
+        const mediaBuffer = await downloadMediaMessage(
+          msg,
+          "buffer",
+          {},
+          {
+            logger: logger,
+            reuploadRequest: makeWASocket.getAggregateVotesInPollMessage,
+          }
+        );
+        const mediaDir = path.join(dailyLogDir, "media");
+        await ensureDirExists(mediaDir);
+        const timeString = now.toTimeString().slice(0, 8).replace(/:/g, "-");
+        const extension = mediaMessage.mimetype.split("/")[1] || "dat";
+        const fileName = mediaMessage.fileName || `media.${extension}`;
+        const mediaFileName = `${timeString}_${fileName}`;
+        const mediaFilePath = path.join(mediaDir, mediaFileName);
+        await fs.writeFile(mediaFilePath, mediaBuffer);
+        const relativeMediaPath = path.join("media", mediaFileName);
+        logEntryText =
+          `[MEDIA DISIMPAN: ${relativeMediaPath}] ${messageBody}`.trim();
+      } catch (mediaError) {
+        console.error(
+          `[ERROR MEDIA] Gagal mengunduh atau menyimpan media dari ${contactId}:`,
+          mediaError
+        );
+        logEntryText = `[GAGAL UNDUH MEDIA] ${messageBody}`.trim();
+      }
     }
     if (!logEntryText) return;
     const botNumber = sock.user.id.split(":")[0] + "@s.whatsapp.net";
@@ -116,9 +124,11 @@ async function logMessage(msg) {
 
     await fs.appendFile(logFileName, logEntry);
   } catch (error) {
-    if (!error.message.includes("media")) {
-      console.error("[ERROR] Terjadi kesalahan pada fungsi logMessage:", error);
-    }
+    // Tangani error umum lainnya
+    console.error(
+      "[ERROR] Terjadi kesalahan umum pada fungsi logMessage:",
+      error
+    );
   }
 }
 
@@ -204,13 +214,20 @@ async function saveBlockedContactsToFile() {
 
 let lastBlockedList = [];
 
+// Buat logger dengan level fatal
+const logger = pino({ level: "fatal" }).child({
+  level: "fatal",
+  stream: "terminal",
+});
+
 async function startSock() {
   console.log("Menginisialisasi client WhatsApp (Baileys)...");
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    logger: pino({ level: "silent" }),
+    // logger: pino({ level: "silent" }),
+    logger: logger, // Gunakan logger yang sudah diatur
     browser: ["Windows", "Chrome", "100.0.0"],
   });
 
